@@ -78,9 +78,23 @@ private:
 };
 BOOST_GEOMETRY_REGISTER_BOX(Box, Point, min(), max());
 
-using Value = std::pair<Box, unsigned>;
+using Storage = std::list<Box>; // it doesn't work with vector
 
-using RTree = bgi::rtree<Value, bgi::quadratic<16>>;
+class BoxWrapper {
+public:
+    BoxWrapper(Storage::const_iterator it)
+        : _it(it) {}
+
+    const Storage::const_iterator & it() const { return _it; }
+
+    const Point & min() const { return _it->min(); }
+    const Point & max() const { return _it->max(); }
+private:
+    Storage::const_iterator _it;
+};
+BOOST_GEOMETRY_REGISTER_BOX(BoxWrapper, Point, min(), max());
+
+using RTree = bgi::rtree<BoxWrapper, bgi::quadratic<16>>;
 
 // ------------------------------------------------------------
 // Main
@@ -92,7 +106,7 @@ int main() {
     RTree rtree;
 
     // add 8 boxes
-    const auto boxes = std::vector{
+    auto boxes = Storage{
         Box{Point(0, 0, 0), Point(0 + 4, 0 + 4, 0 + 4)},
         Box{Point(5, 0, 0), Point(5 + 4, 0 + 4, 0 + 4)},
         Box{Point(0, 5, 0), Point(0 + 4, 5 + 4, 0 + 4)},
@@ -102,20 +116,20 @@ int main() {
         Box{Point(0, 5, 5), Point(0 + 4, 5 + 4, 5 + 4)},
         Box{Point(5, 5, 5), Point(5 + 4, 5 + 4, 5 + 4)},
     };
-    for (size_t i = 0; i < boxes.size(); ++i) {
-        rtree.insert(Value(boxes[i], i));
+    for (auto box_it = boxes.begin(); box_it != boxes.end(); ++box_it) {
+        rtree.insert(BoxWrapper(box_it));
     }
 
     // Print all rectangles in the R-tree
     std::cout << std::endl;
     std::cout << "All rectangles in the R-tree:" << std::endl;
-    for (const auto & v : rtree) {
-        std::cout << bg::dsv(v.first) << " - " << v.second << std::endl;
+    for (const auto & box_it : rtree) {
+        std::cout << bg::dsv(box_it) << std::endl;
     }
 
     // find values intersecting some area defined by a Box
     Box query_box(Point(3, 3, 4), Point(3 + 4, 3 + 4, 4 + 6));
-    std::vector<Value> result_s;
+    std::vector<BoxWrapper> result_s;
     rtree.query(
         bgi::overlaps(query_box),
         std::back_inserter(result_s));
@@ -126,9 +140,28 @@ int main() {
     std::cout << bg::dsv(query_box) << std::endl;
     std::cout << std::endl;
     std::cout << "spatial query result:" << std::endl;
-    for (auto const & v : result_s) {
-        std::cout << bg::dsv(v.first) << " - " << v.second << std::endl;
+    for (auto const & box_it : result_s) {
+        std::cout << bg::dsv(box_it) << std::endl;
         // std::cout << bg::wkt<BoostBox>(v.first) << " - " << v.second << std::endl;
+    }
+
+    // delete all values from the R-tree
+    std::cout << std::endl;
+    std::cout << "delete values:" << std::endl;
+    for (auto it = boxes.begin(); it != boxes.end();) {
+        auto value_to_remove = BoxWrapper(it);
+        rtree.remove(value_to_remove);
+        it = boxes.erase(it);
+    }
+    if (boxes.empty()) {
+        std::cout << "Boxes are empty" << std::endl;
+    } else {
+        std::cout << "Boxes are NOT empty" << std::endl;
+    }
+    if (rtree.empty()) {
+        std::cout << "R-tree is empty" << std::endl;
+    } else {
+        std::cout << "R-tree is NOT empty" << std::endl;
     }
 
     return 0;
