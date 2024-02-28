@@ -3,6 +3,9 @@
 *goo*
 *hoo*
 
+# binary
+executable
+
 # c++
 build/
 benchmark.log
